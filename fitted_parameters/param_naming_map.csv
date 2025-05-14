@@ -1,0 +1,10 @@
+sigma_q,sigma_process_noise
+mu_a, prior_mean_retention
+sigma_a,prior_sigma_retention
+sigma_d,prior_sigma_drift
+alpha,alpha_context
+rho,rho_context
+sigma_m,sigma_motor_noise
+alpha_e,alpha_cue 
+
+

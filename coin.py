@@ -37,7 +37,7 @@ from tqdm import trange
 import multiprocessing
 
 from utils.general_utils import (
-    sample_num_tables_CRF, 
+    sample_num_tables_CRF, sample_num_tables_CRF_v2,
     per_slice_invert, 
     per_slice_multiply, 
     log_sum_exp, 
@@ -849,7 +849,7 @@ class COIN:
             coin_state["global_transition_probabilities"][0, :] = 1.
         else:
             # sample the number of tables in restaurant i serving dish j
-            coin_state["m_context"], _, _, _ = sample_num_tables_CRF(
+            coin_state["m_context"], _, _, _ = sample_num_tables_CRF_v2(
                 self.alpha_context * coin_state["global_transition_probabilities"][None] + coin_state["kappa"] * np.eye(self.max_contexts+1)[..., None], 
                 coin_state["n_context"], 
             )
@@ -899,7 +899,7 @@ class COIN:
             coin_state["global_cue_probabilities"][0, :] = 1.0
         else:
             # sample the number of tables in restaurant i serving dish j
-            coin_state["m_cue"] = sample_num_tables_CRF(
+            coin_state["m_cue"] = sample_num_tables_CRF_v2(
                 np.tile(self.alpha_cue * coin_state["global_cue_probabilities"][None], (self.max_contexts+1, 1, 1)), 
                 coin_state["n_cue"], 
             )

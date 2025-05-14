@@ -22,6 +22,9 @@ from typing import List
 import numpy as np
 
 
+LOG_EPSILON = -1e10 # a log of a very small number
+np_LOG_EPSILON = np.array([LOG_EPSILON])
+
 def sample_num_tables_CRF(
     weights: np.ndarray, 
     max_tables: np.ndarray, 
@@ -163,3 +166,99 @@ if __name__=="__main__":
     ss, max_n, all_stirling_number, log_max_stirling_number = stirling_number(n)
     
     pass
+
+def log_stirling_number(
+    n: int, 
+    max_n: int = 1, 
+    log_all_stirling_number: List[np.ndarray] = [np.array([0])], 
+    log_max_stirling_number: List[int] = [0], 
+) -> np.ndarray:
+    # compute the unsigned stirling numbers of the first kind
+
+
+    if n > max_n:
+        for i in range(max_n, n):
+            if len(log_all_stirling_number) > i:
+                log_all_stirling_number[i] = np.logaddexp(
+                    np.concatenate([log_all_stirling_number[i-1] + np.log(i), np_LOG_EPSILON], axis=0),
+                    np.concatenate([np_LOG_EPSILON, log_all_stirling_number[i-1]], axis=0)
+                )
+            else:
+                log_all_stirling_number.append(
+                    np.logaddexp(
+                    np.concatenate([log_all_stirling_number[i-1] + np.log(i) , np_LOG_EPSILON], axis=0),
+                    np.concatenate([np_LOG_EPSILON, log_all_stirling_number[i-1]], axis=0)
+                    )
+                )
+            max_curr = np.max(log_all_stirling_number[i])
+            log_all_stirling_number[i] = log_all_stirling_number[i] - max_curr
+            
+            if len(log_max_stirling_number) > i:
+                log_max_stirling_number[i] = log_max_stirling_number[i-1] + max_curr
+            else:
+                log_max_stirling_number.append(log_max_stirling_number[i-1] + max_curr)
+
+        max_n = n
+    
+    log_curr_stirling_number = log_all_stirling_number[n-1]
+    curr_log_max_stirling_number = log_max_stirling_number[n-1]
+
+    return (
+        log_curr_stirling_number, 
+        curr_log_max_stirling_number, 
+        max_n, 
+        log_all_stirling_number, 
+        log_max_stirling_number, 
+    )
+
+
+def sample_num_tables_CRF_v2(
+    weights: np.ndarray, 
+    max_tables: np.ndarray, 
+    max_n: int = 1, 
+    log_all_stirling_number: List[np.ndarray] = [np.array([0])], 
+    log_max_stirling_number: List[int] = [0], 
+):
+    """
+    Sample the number of tables in restaurant i serving dish j
+    
+    params
+        weights (np.ndarray): weights for each dish
+        max_tables (np.ndarray): number of maximum number of tables within each restaurant
+    """
+    num_tables = np.zeros_like(max_tables, dtype=max_tables.dtype) # (max_contexts+1, max_contexts+1, particles)
+    
+    B, I, J = np.unique(max_tables.flatten(order="F"), return_index=True, return_inverse=True)
+    
+    log_weights = np.log(weights)
+    
+    for i in range(len(B)):
+        max_table = B[i]
+        
+        if max_table > 0:
+            table_list = np.arange(1, max_table+1)
+            (
+                log_stirling_num, 
+                curr_log_max_stirling_number, 
+                max_n, 
+                log_all_stirling_number, 
+                log_max_stirling_number, 
+            ) = log_stirling_number(
+                max_table, 
+                max_n, 
+                log_all_stirling_number, 
+                log_max_stirling_number, 
+            )
+            for j in np.where(J == i)[0]:
+                inds1, inds2, inds3 = np.unravel_index(j, max_tables.shape, order="F")
+                c_likelihood = table_list * log_weights[inds1, inds2, inds3]
+                # c_likelihood = np.cumsum(stirling_num * np.exp(c_likelihood - np.max(c_likelihood)), axis=0)
+                exp_arg = log_stirling_num + c_likelihood - np.max(c_likelihood)
+                exp_arg_bias =  - np.max(exp_arg)
+                c_likelihood = np.cumsum(np.exp(exp_arg + exp_arg_bias), axis=0)
+                # TODO: verify if the following line is actually correct (by comparing with the matlab implementation)
+                num_tables[inds1, inds2, inds3] = 1 + np.sum((np.random.rand() * c_likelihood[max_table-1]) > c_likelihood, axis=0)
+    
+    return num_tables, max_n, log_all_stirling_number, log_max_stirling_number
+
+
